@@ -5,46 +5,67 @@ import { fileURLToPath } from "url";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// __dirname対応（ESM用）
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 app.disable("x-powered-by");
 
 // ========================
-// 🔥 プロキシ機能
+// 🔥 プロキシ（書き換え版）
 // ========================
 app.get("/proxy", async (req, res) => {
-  const url = req.query.url;
+  const target = req.query.url;
 
-  if (!url) {
+  if (!target) {
     return res.send("URL required");
   }
 
   try {
-    const response = await fetch(url);
-    const text = await response.text();
+    const response = await fetch(target);
+    let html = await response.text();
 
-    res.send(text);
+    // ===== リンク書き換え =====
+    html = html.replace(
+      /href="(.*?)"/g,
+      (match, url) => {
+        if (url.startsWith("http")) {
+          return `href="/proxy?url=${encodeURIComponent(url)}"`;
+        }
+        return match;
+      }
+    );
+
+    // ===== フォーム書き換え =====
+    html = html.replace(
+      /<form([^>]*)action="(.*?)"/g,
+      (match, attrs, action) => {
+        let newUrl;
+
+        if (action.startsWith("http")) {
+          newUrl = action;
+        } else {
+          newUrl = new URL(action, target).href;
+        }
+
+        return `<form${attrs} action="/proxy" method="GET">
+        <input type="hidden" name="url" value="${newUrl}">`;
+      }
+    );
+
+    res.send(html);
+
   } catch (err) {
-    res.send("Error fetching page");
+    res.send("Error loading page");
   }
 });
 
 // ========================
-// 🔥 トップページ（これがNot Found対策）
+// 🔥 トップページ
 // ========================
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // ========================
-// 🔥 静的ファイル
-// ========================
 app.use(express.static("public"));
 
-// ========================
-// 🚀 サーバー起動
-// ========================
-app.listen(PORT, () => {
-  console.log("Server running");
-});
+app.listen(PORT, () => {});
