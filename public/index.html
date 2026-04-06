@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Proxy</title>
+</head>
+<body>
+
+  <h2>Proxy Browser</h2>
+
+  <input id="url" placeholder="https://example.com" style="width:70%">
+  <button onclick="go()">GO</button>
+
+  <iframe id="view" style="width:100%; height:90vh;"></iframe>
+
+  <script>
+    function go() {
+      let url = document.getElementById("url").value;
+
+      if (!url.startsWith("http")) {
+        url = "https://" + url;
+      }
+
+      document.getElementById("view").src =
+        "/proxy?url=" + encodeURIComponent(url);
+    }
+  </script>
+
+</body>
+</html>
