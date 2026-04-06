@@ -1,72 +1,51 @@
 import express from "express";
-import puppeteer from "puppeteer";
+import fetch from "node-fetch";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// __dirname対応（ESM用）
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 app.disable("x-powered-by");
 
-// 同時実行制限（超重要）
-let isBusy = false;
-
-// シンプルプロキシ
+// ========================
+// 🔥 プロキシ機能
+// ========================
 app.get("/proxy", async (req, res) => {
   const url = req.query.url;
-  if (!url) return res.send("URL required");
 
-  // 同時実行防止
-  if (isBusy) {
-    return res.send("Server busy, try again");
+  if (!url) {
+    return res.send("URL required");
   }
 
-  isBusy = true;
-
-  let browser;
-
   try {
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu"
-      ]
-    });
+    const response = await fetch(url);
+    const text = await response.text();
 
-    const page = await browser.newPage();
-
-    // 軽量化
-    await page.setRequestInterception(true);
-    page.on("request", (req) => {
-      const type = req.resourceType();
-      if (["image", "media", "font"].includes(type)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
-    await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 10000
-    });
-
-    const html = await page.content();
-
-    await browser.close();
-    isBusy = false;
-
-    res.send(html);
-
+    res.send(text);
   } catch (err) {
-    if (browser) await browser.close();
-    isBusy = false;
-
-    res.send("Error loading page");
+    res.send("Error fetching page");
   }
 });
 
+// ========================
+// 🔥 トップページ（これがNot Found対策）
+// ========================
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ========================
+// 🔥 静的ファイル
+// ========================
 app.use(express.static("public"));
 
-app.listen(PORT, () => {});
+// ========================
+// 🚀 サーバー起動
+// ========================
+app.listen(PORT, () => {
+  console.log("Server running");
+});
